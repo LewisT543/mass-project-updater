@@ -15,6 +15,7 @@ type Config struct {
 	DryRun      bool
 }
 
+// TODO Set up logging dir in this?
 func Load() Config {
 	cwd, _ := os.Getwd()
 	workDir := filepath.Join(cwd, "..", "UI_PROJECTS_FOR_BOT")

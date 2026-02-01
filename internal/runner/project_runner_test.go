@@ -117,7 +117,7 @@ func TestRunAllProjects_Concurrent(t *testing.T) {
 			"dependencies": {"react": "^18.2.0","axios":"^1.3.0"},
 			"devDependencies": {"vite":"^4.0.0"}
 		}`), 0644)
-
+		// TODO inject logger for tests?
 		return RunProject(cfg, p, updates, fakeGit, fakeNPM, fakeMR, dir, "ERROR_LOGS")
 	})
 
