@@ -25,27 +25,42 @@ func LoadUpdates(path string) (Updates, error) {
 	return u, err
 }
 
-func Apply(path string, updates Updates) error {
-	b, err := os.ReadFile(path)
+func Apply(pkgPath string, updates Updates) error {
+	b, err := os.ReadFile(pkgPath)
 	if err != nil {
 		return err
 	}
 
-	var pkg PackageJSON
-	json.Unmarshal(b, &pkg)
-
-	for d, v := range updates.Dependencies {
-		if _, ok := pkg.Dependencies[d]; ok {
-			pkg.Dependencies[d] = v
-		}
+	var data map[string]interface{}
+	if err := json.Unmarshal(b, &data); err != nil {
+		return err
 	}
 
-	for d, v := range updates.DevDependencies {
-		if _, ok := pkg.DevDependencies[d]; ok {
-			pkg.DevDependencies[d] = v
+	// ------------------------
+	// Update existing dependencies
+	// ------------------------
+	if deps, ok := data["dependencies"].(map[string]interface{}); ok {
+		for k, v := range updates.Dependencies {
+			if _, exists := deps[k]; exists {
+				deps[k] = v
+			}
 		}
+		data["dependencies"] = deps
 	}
 
-	out, _ := json.MarshalIndent(pkg, "", "  ")
-	return os.WriteFile(path, out, 0644)
+	if devDeps, ok := data["devDependencies"].(map[string]interface{}); ok {
+		for k, v := range updates.DevDependencies {
+			if _, exists := devDeps[k]; exists {
+				devDeps[k] = v
+			}
+		}
+		data["devDependencies"] = devDeps
+	}
+
+	// Write back
+	newB, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(pkgPath, newB, 0644)
 }
