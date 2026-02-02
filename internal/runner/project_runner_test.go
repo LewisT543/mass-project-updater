@@ -1,6 +1,11 @@
 package runner
 
 import (
+	"errors"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
+	_ "go.uber.org/zap/zaptest/observer"
+
 	"os"
 	"path/filepath"
 	"sync"
@@ -67,7 +72,7 @@ type FakeMRClient struct {
 	Called map[int]bool
 }
 
-func (f *FakeMRClient) CreateMR(projectID int, sourceBranch, targetBranch, title string) (string, error) {
+func (f *FakeMRClient) CreateMR(projectID int, _, _, _ string) (string, error) {
 	if f.Called == nil {
 		f.Called = map[int]bool{}
 	}
@@ -83,6 +88,7 @@ func TestRunAllProjects_Concurrent(t *testing.T) {
 	fakeGit := &FakeGit{}
 	fakeNPM := &FakeNPM{}
 	fakeMR := &FakeMRClient{}
+	logger := zap.NewNop()
 
 	cfg := config.Config{
 		WorkDir:    t.TempDir(),
@@ -117,8 +123,7 @@ func TestRunAllProjects_Concurrent(t *testing.T) {
 			"dependencies": {"react": "^18.2.0","axios":"^1.3.0"},
 			"devDependencies": {"vite":"^4.0.0"}
 		}`), 0644)
-		// TODO inject logger for tests?
-		return RunProject(cfg, p, updates, fakeGit, fakeNPM, fakeMR, dir, "ERROR_LOGS")
+		return RunProject(cfg, p, updates, fakeGit, fakeNPM, fakeMR, dir, logger)
 	})
 
 	// Validate all results
@@ -158,6 +163,7 @@ func TestRunAllProjects_DryRun(t *testing.T) {
 	fakeGit := &FakeGit{}
 	fakeNPM := &FakeNPM{}
 	fakeMR := &FakeMRClient{}
+	logger := zap.NewNop()
 
 	cfg := config.Config{
 		WorkDir:    t.TempDir(),
@@ -173,7 +179,7 @@ func TestRunAllProjects_DryRun(t *testing.T) {
 	results := RunAllProjects([]model.Project{project}, 1, func(p model.Project) (string, error) {
 		return RunProject(cfg, p, packagejson.Updates{
 			Dependencies: map[string]string{"react": "^18.3.0"},
-		}, fakeGit, fakeNPM, fakeMR, dir)
+		}, fakeGit, fakeNPM, fakeMR, dir, logger)
 	})
 
 	// Validate result
@@ -190,4 +196,89 @@ func TestRunAllProjects_DryRun(t *testing.T) {
 	// Package.json unchanged
 	afterB, _ := os.ReadFile(filepath.Join(dir, "package.json"))
 	assert.JSONEq(t, `{"dependencies":{"react":"^18.2.0"}}`, string(afterB))
+}
+
+type fakeExecError struct {
+	output []byte
+}
+
+func (e *fakeExecError) Error() string {
+	return "command failed"
+}
+
+func (e *fakeExecError) Output() []byte {
+	return e.output
+}
+
+// ---------------------------
+// runStage tests
+// ---------------------------
+
+func TestRunStage_RegularError_LoggedNotWritten(t *testing.T) {
+	errorDir := t.TempDir()
+
+	core, logs := observer.New(zap.ErrorLevel)
+	logger := zap.New(core)
+
+	project := model.Project{Name: "ui-spa-test"}
+
+	err := runStage(
+		"npmbuild",
+		project,
+		"/tmp/project",
+		func(_ string, _ ...interface{}) error {
+			return errors.New("boom")
+		},
+		logger,
+		errorDir,
+	)
+
+	assert.Error(t, err)
+
+	// Assert log written
+	assert.Len(t, logs.All(), 1)
+	assert.Equal(t, "npmbuild failed", logs.All()[0].Message)
+
+	// Assert no files written
+	entries, _ := os.ReadDir(errorDir)
+	assert.Len(t, entries, 0)
+}
+
+func TestRunStage_ExecError_WrittenToFile(t *testing.T) {
+	errorDir := t.TempDir()
+
+	core, logs := observer.New(zap.ErrorLevel)
+	logger := zap.New(core)
+
+	project := model.Project{Name: "ui-spa-test"}
+
+	execErr := &fakeExecError{
+		output: []byte("npm ERR! build failed"),
+	}
+
+	err := runStage(
+		"npmbuild",
+		project,
+		"/tmp/project",
+		func(_ string, _ ...interface{}) error {
+			return execErr
+		},
+		logger,
+		errorDir,
+	)
+
+	assert.Error(t, err)
+
+	// Assert log written
+	assert.Len(t, logs.All(), 1)
+	assert.Equal(t, "npmbuild failed", logs.All()[0].Message)
+
+	// Assert file written
+	files, _ := os.ReadDir(errorDir)
+	assert.Len(t, files, 1)
+
+	logFile := filepath.Join(errorDir, files[0].Name())
+	content, _ := os.ReadFile(logFile)
+
+	assert.Contains(t, string(content), "npm ERR! build failed")
 }

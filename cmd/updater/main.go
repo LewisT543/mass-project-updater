@@ -3,30 +3,25 @@ package main
 import (
 	"fmt"
 	"go.uber.org/zap"
+	"lewist543.com/mass-project-updater/internal/config"
 	"lewist543.com/mass-project-updater/internal/git"
+	"lewist543.com/mass-project-updater/internal/gitlab"
 	"lewist543.com/mass-project-updater/internal/model"
 	"lewist543.com/mass-project-updater/internal/npm"
-	"log"
-	"os"
-	"path/filepath"
-
-	"lewist543.com/mass-project-updater/internal/config"
-	"lewist543.com/mass-project-updater/internal/gitlab"
 	"lewist543.com/mass-project-updater/internal/packagejson"
 	"lewist543.com/mass-project-updater/internal/runner"
+	"log"
+	"os"
 )
 
 func main() {
 	cfg := config.Load()
+	if err := prepareFilesystem(cfg); err != nil {
+		log.Fatal(err)
+	}
 
-	// setup structured logger
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
-
-	// setup global ERROR_LOGS folder
-	errorLogDir := filepath.Join(cfg.WorkDir, "ERROR_LOGS")
-	os.RemoveAll(errorLogDir)
-	os.MkdirAll(errorLogDir, 0755)
 
 	updates, err := packagejson.LoadUpdates("deps.json")
 	if err != nil {
@@ -49,7 +44,7 @@ func main() {
 	maxWorkers := 5
 
 	results := runner.RunAllProjects(projects, maxWorkers, func(p model.Project) (string, error) {
-		mrURL, err := runner.RunProject(cfg, p, updates, gitRunner, npmRunner, mrClient, "", "ERROR_LOGS", logger)
+		mrURL, err := runner.RunProject(cfg, p, updates, gitRunner, npmRunner, mrClient, "", logger)
 		if err != nil {
 			log.Printf("[ERROR] Project %s: %v", p.Name, err)
 		} else {
@@ -70,4 +65,16 @@ func main() {
 	}
 
 	fmt.Printf("Completed %d projects: %d failed, %d succeeded\n", len(projects), failed, len(projects)-failed)
+}
+
+func prepareFilesystem(cfg config.Config) error {
+	if err := os.MkdirAll(cfg.WorkDir, 0755); err != nil {
+		return err
+	}
+
+	if err := os.RemoveAll(cfg.ErrorLogDir); err != nil {
+		return err
+	}
+
+	return os.MkdirAll(cfg.ErrorLogDir, 0755)
 }

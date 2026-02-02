@@ -24,7 +24,6 @@ func RunProject(
 	npmRunner npm.NPM,
 	mrClient gitlab.MRClient,
 	projectDir string,
-	errorLogDir string,
 	logger *zap.Logger,
 ) (string, error) {
 
@@ -54,7 +53,7 @@ func RunProject(
 			url := args[0].(string)
 			return gitRunner.Clone(url, d)
 		},
-		logger, errorLogDir, project.SSHURL); err != nil {
+		logger, cfg.ErrorLogDir, project.SSHURL); err != nil {
 		return "", err
 	}
 
@@ -63,7 +62,7 @@ func RunProject(
 		func(d string, args ...interface{}) error {
 			return gitRunner.CheckoutDevelop(d)
 		},
-		logger, errorLogDir); err != nil {
+		logger, cfg.ErrorLogDir); err != nil {
 		return "", err
 	}
 
@@ -73,7 +72,7 @@ func RunProject(
 			branch := args[0].(string)
 			return gitRunner.CreateBranch(d, branch)
 		},
-		logger, errorLogDir, cfg.BranchName); err != nil {
+		logger, cfg.ErrorLogDir, cfg.BranchName); err != nil {
 		return "", err
 	}
 
@@ -84,26 +83,26 @@ func RunProject(
 		func(d string, args ...interface{}) error {
 			return packagejson.Apply(filepath.Join(d, "package.json"), updates)
 		},
-		logger, errorLogDir); err != nil {
+		logger, cfg.ErrorLogDir); err != nil {
 		return "", err
 	}
 
 	// -------------------------
 	// NPM operations
 	// -------------------------
-	if err := runStage("npm install", project, dir,
+	if err := runStage("npminstall", project, dir,
 		func(d string, args ...interface{}) error {
 			return npmRunner.Install(d)
 		},
-		logger, errorLogDir); err != nil {
+		logger, cfg.ErrorLogDir); err != nil {
 		return "", err
 	}
 
-	if err := runStage("npm build", project, dir,
+	if err := runStage("npmbuild", project, dir,
 		func(d string, args ...interface{}) error {
 			return npmRunner.Build(d)
 		},
-		logger, errorLogDir); err != nil {
+		logger, cfg.ErrorLogDir); err != nil {
 		return "", err
 	}
 
@@ -114,7 +113,7 @@ func RunProject(
 		func(d string, args ...interface{}) error {
 			return gitRunner.CommitAndPush(d, "chore: update dependencies", cfg.BranchName)
 		},
-		logger, errorLogDir); err != nil {
+		logger, cfg.ErrorLogDir); err != nil {
 		return "", err
 	}
 
@@ -137,19 +136,27 @@ func RunProject(
 func runStage(stage string, project model.Project, dir string, fn func(string, ...interface{}) error, logger *zap.Logger, errorLogDir string, args ...interface{}) error {
 	if err := fn(dir, args...); err != nil {
 		logFile := filepath.Join(errorLogDir, fmt.Sprintf("%s_%s.log", project.Name, stage))
+
 		if execErr, ok := err.(interface{ Output() []byte }); ok {
 			_ = os.WriteFile(logFile, execErr.Output(), 0644)
+
+			logger.Error(fmt.Sprintf("%s failed (output written)", stage),
+				zap.String("project", project.Name),
+				zap.String("stage", stage),
+				zap.String("logFile", logFile),
+				zap.Error(err),
+			)
 		} else {
-			_ = os.WriteFile(logFile, []byte(err.Error()), 0644)
+			logger.Error(fmt.Sprintf("%s failed", stage),
+				zap.String("project", project.Name),
+				zap.String("stage", stage),
+				zap.Error(err),
+			)
 		}
-		logger.Error(fmt.Sprintf("%s failed", stage),
-			zap.String("project", project.Name),
-			zap.String("stage", stage),
-			zap.String("logFile", logFile),
-			zap.Error(err),
-		)
+
 		return fmt.Errorf("stage=%s: %w", stage, err)
 	}
+
 	logger.Info(fmt.Sprintf("%s succeeded", stage), zap.String("project", project.Name))
 	return nil
 }
