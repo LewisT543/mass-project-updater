@@ -4,7 +4,7 @@ Mass Project Updater is a small Go CLI that automates dependency updates across 
 
 It:
 - Finds projects in a GitLab group whose names start with a given prefix (default `ui-spa`).
-- Applies version changes from `deps.json` to each project's `package.json`.
+- Applies version changes from `deps.json` to each project's `package.json` (including optional `overrides` for transitive dependencies).
 - Runs `npm install` and `npm build`, commits the changes, and opens an MR back to `develop`.
 
 ### Requirements

@@ -39,9 +39,10 @@ func ensureDepsJSON(distDir string) {
 		return
 	}
 
-	starter := map[string]map[string]string{
-		"dependencies":    {},
-		"devDependencies": {},
+	starter := map[string]interface{}{
+		"dependencies":    map[string]string{},
+		"devDependencies": map[string]string{},
+		"overrides":       map[string]interface{}{},
 	}
 
 	b, err := json.MarshalIndent(starter, "", "  ")

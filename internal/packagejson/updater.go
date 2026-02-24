@@ -6,13 +6,9 @@ import (
 )
 
 type Updates struct {
-	Dependencies    map[string]string `json:"dependencies"`
-	DevDependencies map[string]string `json:"devDependencies"`
-}
-
-type PackageJSON struct {
-	Dependencies    map[string]string `json:"dependencies"`
-	DevDependencies map[string]string `json:"devDependencies"`
+	Dependencies    map[string]string      `json:"dependencies"`
+	DevDependencies map[string]string      `json:"devDependencies"`
+	Overrides       map[string]interface{} `json:"overrides"`
 }
 
 func LoadUpdates(path string) (Updates, error) {
@@ -55,6 +51,22 @@ func Apply(pkgPath string, updates Updates) error {
 			}
 		}
 		data["devDependencies"] = devDeps
+	}
+
+	// ------------------------
+	// Apply overrides
+	// ------------------------
+	if len(updates.Overrides) > 0 {
+		current, _ := data["overrides"].(map[string]interface{})
+		if current == nil {
+			current = map[string]interface{}{}
+		}
+
+		for k, v := range updates.Overrides {
+			current[k] = v
+		}
+
+		data["overrides"] = current
 	}
 
 	// Write back

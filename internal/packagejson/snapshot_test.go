@@ -22,6 +22,13 @@ func TestApply_Snapshot(t *testing.T) {
 		Dependencies: map[string]string{
 			"react": "^18.3.0",
 		},
+		DevDependencies: map[string]string{
+			"vite": "^4.1.0",
+		},
+		Overrides: map[string]interface{}{
+			"left-pad": "2.0.0",
+			"debug":    "4.3.7",
+		},
 	}
 
 	Apply(pkgPath, updates)
