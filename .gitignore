@@ -4,6 +4,7 @@ UI_PROJECTS_FOR_BOT/
 # Binaries
 /bin/
 /build/
+/dist/
 /*.exe
 /*.exe~
 /*.dll
@@ -20,6 +21,7 @@ UI_PROJECTS_FOR_BOT/
 /vendor/
 
 # IDE/editor settings
+.cursor/
 .vscode/
 .idea/
 *.iml
@@ -29,6 +31,3 @@ UI_PROJECTS_FOR_BOT/
 # OS generated files
 .DS_Store
 Thumbs.db
-
-# Go module cache
-go.sum

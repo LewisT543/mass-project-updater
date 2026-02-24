@@ -271,7 +271,7 @@ func TestRunStage_ExecError_WrittenToFile(t *testing.T) {
 
 	// Assert log written
 	assert.Len(t, logs.All(), 1)
-	assert.Equal(t, "npmbuild failed", logs.All()[0].Message)
+	assert.Equal(t, "npmbuild failed (output written)", logs.All()[0].Message)
 
 	// Assert file written
 	files, _ := os.ReadDir(errorDir)

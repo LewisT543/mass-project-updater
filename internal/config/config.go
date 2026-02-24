@@ -27,7 +27,7 @@ func Load() Config {
 		ErrorLogDir: filepath.Join(cwd, "..", "ERROR_LOGS"),
 		BranchName:  getenv("BRANCH_NAME", "chore/dependency-updates"),
 		MaxWorkers:  5,
-		DryRun:      os.Getenv("DRY_RUN") == "true",
+		DryRun:      false,
 	}
 }
 
